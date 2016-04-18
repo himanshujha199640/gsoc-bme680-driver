@@ -1,0 +1,62 @@
+Diolan DLN2 custom APCI table
+
+The Diolan DLN2 is an USB to I2C/SPI/GPIO bridge and as such it can be used to
+connect to various I2C or SPI devices. Because these busses lack an enumeration
+protocol, the driver obtains various information about the device (such as I2C
+address and GPIO pins) from either ACPI or device tree.
+
+To allow enumerating devices and their properties via ACPI, the Diolan
+driver looks for an ACPI tree with the root _HID set to "A2572013". If
+it finds such an ACPI object it will set the ACPI companion to the
+DLN2 MFD driver and from their it will be propagated to all its
+sub-devices (I2C, GPIO, SPI).
+
+The user can either load the custom DSDT table with three methods:
+
+1. Via QEMU (see -acpitable)
+
+2. Via the CONFIG_ACPI_CUSTOM_DSDT kernel config option (see
+Documentation/acpi/dsdt-override.txt)
+
+3. By placing the custom DSDT in the firmware paths in a file name
+dln2.aml.
+
+Here is an example ACPI table that enumerates a BMC150 accelerometer
+and defines its I2C address and GPIO pin used as an interrupt source:
+
+DefinitionBlock ("ssdt.aml", "SSDT", 1, "INTEL ", "CpuDptf", 0x00000003)
+{
+	Device (DLN0)
+	{
+		Name (_ADR, Zero)
+		Name (_HID, "A2572013")
+
+		Device (STAC)
+		{
+			Name (_ADR, Zero)
+			Name (_HID, "BMC150A")
+			Name (_CID, "INTACCL")
+			Name (_UID, One)
+
+			Method (_CRS, 0, Serialized)
+			{
+				Name (RBUF, ResourceTemplate ()
+				{
+					I2cSerialBus (0x0010, ControllerInitiated, 0x00061A80,
+						      AddressingMode7Bit, "\\DLN0",
+						      0x00, ResourceConsumer, ,)
+
+					GpioInt (Level, ActiveHigh, Exclusive, PullDown, 0x0000,
+						 "\\DLN0", 0x00, ResourceConsumer, , )
+					{ // Pin list
+						0
+					}
+				})
+				Return (RBUF)
+		       }
+		}
+	}
+}
+
+The resources defined in the devices under the DLN0 are those
+supported by the I2C, GPIO and SPI sub-systems.

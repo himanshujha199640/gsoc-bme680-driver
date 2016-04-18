@@ -23,6 +23,8 @@
 #include <linux/mfd/core.h>
 #include <linux/mfd/dln2.h>
 #include <linux/rculist.h>
+#include <linux/acpi.h>
+#include <linux/firmware.h>
 
 struct dln2_header {
 	__le16 size;
@@ -714,6 +716,129 @@ static void dln2_stop(struct dln2_dev *dln2)
 	dln2_stop_rx_urbs(dln2);
 }
 
+#if IS_ENABLED(CONFIG_ACPI)
+
+static struct dln2_acpi_info {
+	const struct firmware *fw;
+	acpi_handle handle;
+	struct acpi_device *dev;
+	int users;
+} dln2_acpi_info;
+
+static DEFINE_MUTEX(dln2_acpi_lock);
+
+static acpi_status dln2_find_acpi_handle(acpi_handle handle, u32 level,
+					 void *ctxt, void **retv)
+{
+	acpi_handle *dln2_handle = (acpi_handle *)retv;
+
+	*dln2_handle = handle;
+
+	return AE_CTRL_TERMINATE;
+}
+
+static void dln2_probe_acpi(struct dln2_dev *dln2)
+{
+	struct device *dev = &dln2->interface->dev;
+	struct dln2_acpi_info *ai = &dln2_acpi_info;
+	acpi_handle h = NULL;
+	int ret;
+	bool fw_loaded = false;
+
+	mutex_lock(&dln2_acpi_lock);
+
+	if (ai->dev)
+		goto out_success;
+
+	/*
+	 * Look for the A2572013 HID in case the ACPI table was loaded
+	 * externally (e.g. from qemu).
+	 */
+	acpi_get_devices("A2572013", dln2_find_acpi_handle, NULL, &h);
+	if (!h) {
+		/* Try to load the ACPI table via a firmware file */
+		ret = request_firmware(&ai->fw, "dln2.aml", NULL);
+		if (ret)
+			goto out_unlock;
+
+		ret = acpi_load_table((void *)ai->fw->data);
+		if (ret) {
+			dev_err(dev, "invalid ACPI table\n");
+			goto out_release_fw;
+		}
+
+		acpi_get_devices("A2572013", dln2_find_acpi_handle, NULL, &h);
+		if (!h) {
+			dev_err(dev, "not a DLN2 ACPI table\n");
+			goto out_leak_fw;
+		}
+
+		ai->handle = h;
+
+		ret = acpi_bus_scan(h);
+		if (ret) {
+			dev_err(dev, "acpi_bus_scan failed: %d\n", ret);
+			goto out_leak_fw;
+		}
+
+		fw_loaded = true;
+	}
+
+	ret = acpi_bus_get_device(h, &ai->dev);
+	if (ret) {
+		dev_err(dev, "failed to get ACPI device: %d\n", ret);
+		if (fw_loaded) {
+			acpi_unload_parent_table(ai->handle);
+			goto out_leak_fw;
+		}
+		goto out_unlock;
+	}
+
+out_success:
+	ACPI_COMPANION_SET(dev, ai->dev);
+	ai->users++;
+	mutex_unlock(&dln2_acpi_lock);
+	return;
+
+out_release_fw:
+	release_firmware(ai->fw);
+out_leak_fw:
+	/*
+	 * Once a table is loaded we can't release the firmware anymore because
+	 * acpi_unload_table does not actually unload the table but keeps it in
+	 * memory to speed up subsequent loads.
+	 */
+	ai->fw = NULL;
+out_unlock:
+	mutex_unlock(&dln2_acpi_lock);
+}
+
+static void dln2_disconnect_acpi(struct dln2_dev *dln2)
+{
+	struct dln2_acpi_info *ai = &dln2_acpi_info;
+
+	mutex_lock(&dln2_acpi_lock);
+	if (--ai->users == 0 && ai->fw) {
+		acpi_scan_lock_acquire();
+		acpi_bus_trim(ai->dev);
+		acpi_scan_lock_release();
+		acpi_unload_parent_table(ai->handle);
+		ai->dev = NULL;
+		/* we can't release firmware see comment in dln2_probe_acpi */
+		ai->fw = NULL;
+	}
+	mutex_unlock(&dln2_acpi_lock);
+}
+#else
+static void dln2_probe_acpi(struct dln2_dev *dln2)
+{
+}
+
+static void dln2_disconnect_acpi(struct dln2_dev *dln2)
+{
+}
+#endif
+
 static void dln2_disconnect(struct usb_interface *interface)
 {
 	struct dln2_dev *dln2 = usb_get_intfdata(interface);
@@ -721,6 +846,8 @@ static void dln2_disconnect(struct usb_interface *interface)
 	dln2_stop(dln2);
 
 	mfd_remove_devices(&interface->dev);
+
+	dln2_disconnect_acpi(dln2);
 
 	dln2_free(dln2);
 }
@@ -773,6 +900,8 @@ static int dln2_probe(struct usb_interface *interface,
 		dev_err(dev, "failed to initialize hardware\n");
 		goto out_stop_rx;
 	}
+
+	dln2_probe_acpi(dln2);
 
 	ret = mfd_add_hotplug_devices(dev, dln2_devs, ARRAY_SIZE(dln2_devs));
 	if (ret != 0) {
