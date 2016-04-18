@@ -584,8 +584,49 @@ static int dln2_gpio_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM_SLEEP
+static int dln2_gpio_suspend(struct device *dev)
+{
+	struct dln2_gpio *dln2 = dev_get_drvdata(dev);
+	int pin;
+	int ret;
+
+	for(pin = 0; pin < dln2->gpio.ngpio; pin++) {
+		if (test_bit(pin, dln2->enabled_irqs)) {
+			ret = dln2_gpio_pin_cmd(dln2, DLN2_GPIO_PIN_DISABLE, pin);
+			if (ret < 0)
+				return ret;
+		}
+	}
+
+	return 0;
+}
+
+static int dln2_gpio_resume(struct device *dev)
+{
+	struct dln2_gpio *dln2 = dev_get_drvdata(dev);
+	int pin;
+	int ret;
+
+	for(pin = 0; pin < dln2->gpio.ngpio; pin++) {
+		if (test_bit(pin, dln2->enabled_irqs)) {
+			ret = dln2_gpio_pin_cmd(dln2, DLN2_GPIO_PIN_ENABLE, pin);
+			if (ret < 0)
+				return ret;
+		}
+	}
+
+	return 0;
+}
+#endif /* CONFIG_PM_SLEEP */
+
+static const struct dev_pm_ops dln2_gpio_pm = {
+	SET_SYSTEM_SLEEP_PM_OPS(dln2_gpio_suspend, dln2_gpio_resume)
+};
+
 static struct platform_driver dln2_gpio_driver = {
 	.driver.name	= "dln2-gpio",
+	.driver.pm	= &dln2_gpio_pm,
 	.probe		= dln2_gpio_probe,
 	.remove		= dln2_gpio_remove,
 };

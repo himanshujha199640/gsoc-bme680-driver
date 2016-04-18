@@ -249,8 +249,29 @@ static int dln2_i2c_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM_SLEEP
+static int dln2_i2c_suspend(struct device *dev)
+{
+	struct dln2_i2c *dln2 = dev_get_drvdata(dev);
+
+	return dln2_i2c_enable(dln2, false);
+}
+
+static int dln2_i2c_resume(struct device *dev)
+{
+	struct dln2_i2c *dln2 = dev_get_drvdata(dev);
+
+	return dln2_i2c_enable(dln2, true);
+}
+#endif /* CONFIG_PM_SLEEP */
+
+static const struct dev_pm_ops dln2_i2c_pm = {
+	SET_SYSTEM_SLEEP_PM_OPS(dln2_i2c_suspend, dln2_i2c_resume)
+};
+
 static struct platform_driver dln2_i2c_driver = {
 	.driver.name	= "dln2-i2c",
+	.driver.pm	= &dln2_i2c_pm,
 	.probe		= dln2_i2c_probe,
 	.remove		= dln2_i2c_remove,
 };

@@ -1004,6 +1004,7 @@ static struct usb_driver dln2_driver = {
 	.id_table = dln2_table,
 	.suspend = dln2_suspend,
 	.resume = dln2_resume,
+	.reset_resume = dln2_resume,
 };
 
 module_usb_driver(dln2_driver);
