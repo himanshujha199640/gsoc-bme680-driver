@@ -18,6 +18,7 @@
 #include <linux/gpio/driver.h>
 #include <linux/platform_device.h>
 #include <linux/mfd/dln2.h>
+#include <linux/acpi.h>
 
 #define DLN2_GPIO_ID			0x01
 
@@ -35,6 +36,10 @@
 #define DLN2_GPIO_PIN_GET_DIRECTION	DLN2_CMD(0x14, DLN2_GPIO_ID)
 #define DLN2_GPIO_PIN_SET_EVENT_CFG	DLN2_CMD(0x1E, DLN2_GPIO_ID)
 #define DLN2_GPIO_PIN_GET_EVENT_CFG	DLN2_CMD(0x1F, DLN2_GPIO_ID)
+#define CMD_GPIO_PIN_PULLUP_ENABLE DLN2_CMD(0x18, DLN2_GPIO_ID)
+#define CMD_GPIO_PIN_PULLUP_DISABLE  DLN2_CMD(0x19, DLN2_GPIO_ID)
+#define CMD_GPIO_PIN_PULLDOWN_ENABLE DLN2_CMD(0x20, DLN2_GPIO_ID)
+#define CMD_GPIO_PIN_PULLDOWN_DISABLE  DLN2_CMD(0x21, DLN2_GPIO_ID)
 
 #define DLN2_GPIO_EVENT_NONE		0
 #define DLN2_GPIO_EVENT_CHANGE		1
@@ -439,6 +444,69 @@ static void dln2_gpio_event(struct platform_device *pdev, u16 echo,
 	}
 }
 
+static int dln2_do_acpi_setup(struct acpi_resource *ares, void *data)
+{
+ int i;
+ u16 cmd[2];
+ const char *info;
+ struct dln2_gpio *dln2 = data;
+ const struct acpi_resource_gpio *agpio = &ares->data.gpio;
+
+ if (ares->type != ACPI_RESOURCE_TYPE_GPIO)
+   return 1;
+
+ switch (agpio->pin_config) {
+ case  ACPI_PIN_CONFIG_PULLUP:
+   info = "pullup";
+   cmd[0] = CMD_GPIO_PIN_PULLDOWN_DISABLE;
+   cmd[1] = CMD_GPIO_PIN_PULLUP_ENABLE;
+   break;
+ case  ACPI_PIN_CONFIG_PULLDOWN:
+   info = "pulldown";
+   cmd[0] = CMD_GPIO_PIN_PULLDOWN_ENABLE;
+   cmd[1] = CMD_GPIO_PIN_PULLUP_DISABLE;
+   break;
+ case  ACPI_PIN_CONFIG_NOPULL:
+   info = "nopull";
+   cmd[0] = CMD_GPIO_PIN_PULLDOWN_DISABLE;
+   cmd[1] = CMD_GPIO_PIN_PULLUP_DISABLE;
+   break;
+ default:
+   return 1;
+ }
+
+ for (i = 0; i < agpio->pin_table_length; i++) {
+   int pin = agpio->pin_table[i];
+
+   dev_info(dln2->gpio.dev, "setting %s on pin %d\n", info, pin);
+   dln2_gpio_pin_cmd(dln2, cmd[0], pin);
+   dln2_gpio_pin_cmd(dln2, cmd[1], pin);
+ }
+
+ return 1;
+}
+
+static void dln2_acpi_setup(struct dln2_gpio *dln2)
+{
+ struct acpi_device *adev, *child;
+ acpi_handle handle;
+
+ handle = ACPI_HANDLE(dln2->gpio.dev);
+ if (!handle || acpi_bus_get_device(handle, &adev))
+   return;
+
+ list_for_each_entry(child, &adev->children, node) {
+   LIST_HEAD(res);
+   int ret;
+
+   ret = acpi_dev_get_resources(child, &res,
+              dln2_do_acpi_setup, dln2);
+   if (ret < 0)
+     continue;
+   acpi_dev_free_resource_list(&res);
+ }
+}
+
 static int dln2_gpio_probe(struct platform_device *pdev)
 {
 	struct dln2_gpio *dln2;
@@ -500,6 +568,8 @@ static int dln2_gpio_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to register event cb: %d\n", ret);
 		return ret;
 	}
+
+  dln2_acpi_setup(dln2);
 
 	return 0;
 }
