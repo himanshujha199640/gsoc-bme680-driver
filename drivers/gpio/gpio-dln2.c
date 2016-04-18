@@ -378,6 +378,9 @@ static void dln2_irq_bus_unlock(struct irq_data *irqd)
 		if (unmasked) {
 			type = dln2->irq_type[pin] & DLN2_GPIO_EVENT_MASK;
 			set_bit(pin, dln2->enabled_irqs);
+			ret = dln2_gpio_pin_cmd(dln2, DLN2_GPIO_PIN_ENABLE, pin);
+			if (ret)
+				dev_err(dln2->gpio.dev, "failed to enable pin");
 		} else {
 			type = DLN2_GPIO_EVENT_NONE;
 			clear_bit(pin, dln2->enabled_irqs);
