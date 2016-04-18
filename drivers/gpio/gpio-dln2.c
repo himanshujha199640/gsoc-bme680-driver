@@ -380,7 +380,7 @@ static void dln2_irq_bus_unlock(struct irq_data *irqd)
 			set_bit(pin, dln2->enabled_irqs);
 			ret = dln2_gpio_pin_cmd(dln2, DLN2_GPIO_PIN_ENABLE, pin);
 			if (ret)
-				dev_err(dln2->gpio.dev, "failed to enable pin");
+				dev_err(dln2->gpio.parent, "failed to enable pin");
 		} else {
 			type = DLN2_GPIO_EVENT_NONE;
 			clear_bit(pin, dln2->enabled_irqs);
@@ -481,7 +481,7 @@ static int dln2_do_acpi_setup(struct acpi_resource *ares, void *data)
  for (i = 0; i < agpio->pin_table_length; i++) {
    int pin = agpio->pin_table[i];
 
-   dev_info(dln2->gpio.dev, "setting %s on pin %d\n", info, pin);
+   dev_info(dln2->gpio.parent, "setting %s on pin %d\n", info, pin);
    dln2_gpio_pin_cmd(dln2, cmd[0], pin);
    dln2_gpio_pin_cmd(dln2, cmd[1], pin);
  }
@@ -494,7 +494,7 @@ static void dln2_acpi_setup(struct dln2_gpio *dln2)
  struct acpi_device *adev, *child;
  acpi_handle handle;
 
- handle = ACPI_HANDLE(dln2->gpio.dev);
+ handle = ACPI_HANDLE(dln2->gpio.parent);
  if (!handle || acpi_bus_get_device(handle, &adev))
    return;
 
