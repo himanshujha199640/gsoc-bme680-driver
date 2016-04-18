@@ -24,6 +24,7 @@
 #include <linux/mfd/dln2.h>
 #include <linux/rculist.h>
 #include <linux/acpi.h>
+#include <linux/of_fdt.h>
 #include <linux/firmware.h>
 
 struct dln2_header {
@@ -668,16 +669,19 @@ static struct dln2_platform_data dln2_pdata_spi = {
 static const struct mfd_cell dln2_devs[] = {
 	{
 		.name = "dln2-gpio",
+		.of_compatible = "diolan,dln2-gpio",
 		.platform_data = &dln2_pdata_gpio,
 		.pdata_size = sizeof(struct dln2_platform_data),
 	},
 	{
 		.name = "dln2-i2c",
+		.of_compatible = "diolan,dln2-i2c",
 		.platform_data = &dln2_pdata_i2c,
 		.pdata_size = sizeof(struct dln2_platform_data),
 	},
 	{
 		.name = "dln2-spi",
+		.of_compatible = "diolan,dln2-spi",
 		.platform_data = &dln2_pdata_spi,
 		.pdata_size = sizeof(struct dln2_platform_data),
 	},
@@ -839,6 +843,53 @@ static void dln2_disconnect_acpi(struct dln2_dev *dln2)
 }
 #endif
 
+#if defined(CONFIG_OF_DYNAMIC) && defined(CONFIG_OF_FLATTREE)
+static struct dln2_of_info {
+	const struct firmware *fw;
+	struct device_node *dev;
+	int users;
+} dln2_of_info;
+
+static DEFINE_MUTEX(dln2_of_lock);
+
+static void dln2_probe_of(struct dln2_dev *dln2)
+{
+	struct device *dev = &dln2->interface->dev;
+	struct dln2_of_info *oi = &dln2_of_info;
+	int ret;
+
+	mutex_lock(&dln2_of_lock);
+
+	if (oi->dev)
+		goto out_success;
+
+	ret = request_firmware(&oi->fw, "dln2.dtb", NULL);
+	if (ret)
+		goto out_unlock;
+	of_fdt_unflatten_tree((unsigned long*)oi->fw->data, &oi->dev);
+	if (!oi->dev)
+		goto out_release_fw;
+	of_root = oi->dev;
+
+out_success:
+	dev->of_node = of_node_get(oi->dev);
+	oi->users++;
+	mutex_unlock(&dln2_of_lock);
+	return;
+
+out_release_fw:
+	release_firmware(oi->fw);
+	oi->fw = NULL;
+out_unlock:
+	mutex_unlock(&dln2_of_lock);
+}
+#else
+static void dln2_probe_of(struct dln2_dev *dln2)
+{
+}
+#endif
+
+
 static void dln2_disconnect(struct usb_interface *interface)
 {
 	struct dln2_dev *dln2 = usb_get_intfdata(interface);
@@ -902,6 +953,7 @@ static int dln2_probe(struct usb_interface *interface,
 	}
 
 	dln2_probe_acpi(dln2);
+	dln2_probe_of(dln2);
 
 	ret = mfd_add_hotplug_devices(dev, dln2_devs, ARRAY_SIZE(dln2_devs));
 	if (ret != 0) {
