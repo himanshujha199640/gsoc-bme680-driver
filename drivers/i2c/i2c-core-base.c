@@ -46,6 +46,7 @@
 #include <linux/property.h>
 #include <linux/rwsem.h>
 #include <linux/slab.h>
+#include <linux/of_fdt.h>
 
 #include "i2c-core.h"
 
@@ -989,6 +990,82 @@ i2c_sysfs_new_device(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR(new_device, S_IWUSR, NULL, i2c_sysfs_new_device);
 
+static void acpi_i2c_register_devices(struct i2c_adapter *adap);
+
+static ssize_t
+i2c_sysfs_new_device_acpi(struct device *dev, struct device_attribute *attr,
+                         const char *buf, size_t count)
+{
+       struct i2c_adapter *adap = to_i2c_adapter(dev);
+       struct acpi_table_header *table = (struct acpi_table_header*)buf;
+       acpi_handle handle = ACPI_HANDLE(adap->dev.parent);
+       int ret;
+
+       if (count < sizeof(*table))
+               return -EINVAL;
+
+       if (count != table->length)
+               return -EINVAL;
+
+       if (!handle)
+               return -ENODEV;
+
+       table = kmemdup(table, count, GFP_KERNEL);
+       if (!table)
+               return -ENOMEM;
+
+       ret = acpi_load_table(table);
+       if (ret) {
+               kfree(table);
+               dev_err(&adap->dev, "invalid ACPI table\n");
+               return ret;
+       } else {
+               acpi_scan_lock_acquire();
+               ret = acpi_bus_scan(handle);
+               acpi_scan_lock_release();
+               if (ret) {
+                       kfree(table);
+                       dev_err(&adap->dev, "bus scan err %d\n", ret);
+                       return ret;
+               }
+       }
+
+       acpi_i2c_register_devices(adap);
+
+       return count;
+}
+static DEVICE_ATTR(new_device_acpi, S_IWUSR, NULL, i2c_sysfs_new_device_acpi);
+
+static void of_i2c_register_devices(struct i2c_adapter *adap);
+
+static ssize_t
+i2c_sysfs_new_device_of(struct device *dev, struct device_attribute *attr,
+                         const char *buf, size_t count)
+{
+       struct i2c_adapter *adap = to_i2c_adapter(dev);
+       unsigned long *table = (unsigned long*)buf;
+       struct device_node *of_node = NULL;
+
+       table = kmemdup(table, count, GFP_KERNEL);
+       if (!table)
+               return -ENOMEM;
+#if defined(CONFIG_OF)
+       of_fdt_unflatten_tree(table, &of_node);
+#endif
+       if (!of_node) {
+               dev_err(&adap->dev, "fail to unflaten tree\n");
+               return -EINVAL;
+       }
+
+       adap->dev.of_node = of_node_get(of_node);
+       of_i2c_register_devices(adap);
+
+       return count;
+}
+static DEVICE_ATTR(new_device_of, S_IWUSR, NULL, i2c_sysfs_new_device_of);
+
+
+
 /*
  * And of course let the users delete the devices they instantiated, if
  * they got it wrong. This interface can only be used to delete devices
@@ -1048,6 +1125,8 @@ static DEVICE_ATTR_IGNORE_LOCKDEP(delete_device, S_IWUSR, NULL,
 static struct attribute *i2c_adapter_attrs[] = {
 	&dev_attr_name.attr,
 	&dev_attr_new_device.attr,
+	&dev_attr_new_device_acpi.attr,
+	&dev_attr_new_device_of.attr,
 	&dev_attr_delete_device.attr,
 	NULL
 };
