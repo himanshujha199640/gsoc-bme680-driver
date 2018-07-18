@@ -64,7 +64,7 @@ static int bme680_spi_probe(struct spi_device *spi)
 		return PTR_ERR(regmap);
 	}
 
-	ret = regmap_write(regmap, BME680_REG_SOFT_RESET,
+	ret = regmap_write(regmap, BME680_REG_SOFT_RESET_SPI,
 			   BME680_CMD_SOFTRESET);
 	if (ret < 0)
 		return ret;

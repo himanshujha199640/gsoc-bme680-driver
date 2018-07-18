@@ -5,15 +5,12 @@
 #define BME680_REG_CHIP_I2C_ID			0xD0
 #define BME680_REG_CHIP_SPI_ID			0x50
 #define BME680_CHIP_ID_VAL			0x61
-#define BME680_REG_SOFT_RESET			0xE0
+#define BME680_REG_SOFT_RESET_I2C		0xE0
+#define BME680_REG_SOFT_RESET_SPI		0x60
 #define BME680_CMD_SOFTRESET			0xB6
 #define BME680_REG_STATUS			0x73
 #define   BME680_SPI_MEM_PAGE_BIT		BIT(4)
-#define   BME680_SPI_MEM_PAGE_1_VAL		1
-
-#define BME680_OSRS_TEMP_X(osrs_t)		((osrs_t) << 5)
-#define BME680_OSRS_PRESS_X(osrs_p)		((osrs_p) << 2)
-#define BME680_OSRS_HUMID_X(osrs_h)		((osrs_h) << 0)
+#define     BME680_SPI_MEM_PAGE_1_VAL		1
 
 #define BME680_REG_TEMP_MSB			0x22
 #define BME680_REG_PRESS_MSB			0x1F
@@ -30,12 +27,12 @@
 #define   BME680_OSRS_PRESS_MASK		GENMASK(4, 2)
 #define   BME680_MODE_MASK			GENMASK(1, 0)
 
-#define BME680_MODE_FORCED			BIT(0)
+#define BME680_MODE_FORCED			1
 #define BME680_MODE_SLEEP			0
 
 #define BME680_REG_CONFIG			0x75
 #define   BME680_FILTER_MASK			GENMASK(4, 2)
-#define   BME680_FILTER_COEFF			BIT(1)
+#define     BME680_FILTER_COEFF_VAL		BIT(1)
 
 /* TEMP/PRESS/HUMID reading skipped */
 #define BME680_MEAS_SKIPPED			0x8000
@@ -58,8 +55,8 @@
 #define BME680_REG_CTRL_GAS_1			0x71
 #define   BME680_RUN_GAS_MASK			BIT(4)
 #define   BME680_NB_CONV_MASK			GENMASK(3, 0)
-#define	BME680_RUN_GAS_EN			BIT(4)
-#define BME680_NB_CONV_0			0
+#define	    BME680_RUN_GAS_EN_BIT		BIT(4)
+#define     BME680_NB_CONV_0_VAL		0
 
 #define BME680_REG_MEAS_STAT_0			0x1D
 #define   BME680_GAS_MEAS_BIT			BIT(6)

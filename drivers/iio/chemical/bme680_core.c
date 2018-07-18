@@ -6,6 +6,7 @@
  * Copyright (C) 2018 Himanshu Jha <himanshujha199640@gmail.com>
  */
 #include <linux/acpi.h>
+#include <linux/bitfield.h>
 #include <linux/device.h>
 #include <linux/module.h>
 #include <linux/log2.h>
@@ -492,7 +493,8 @@ static int bme680_chip_config(struct bme680_data *data)
 {
 	struct device *dev = regmap_get_device(data->regmap);
 	int ret;
-	u8 osrs = BME680_OSRS_HUMID_X(data->oversampling_humid + 1);
+	u8 osrs = FIELD_PREP(BME680_OSRS_HUMIDITY_MASK,
+			     data->oversampling_humid + 1);
 	/*
 	 * Highly recommended to set oversampling of humidity before
 	 * temperature/pressure oversampling.
@@ -507,14 +509,14 @@ static int bme680_chip_config(struct bme680_data *data)
 	/* IIR filter settings */
 	ret = regmap_update_bits(data->regmap, BME680_REG_CONFIG,
 				 BME680_FILTER_MASK,
-				 BME680_FILTER_COEFF);
+				 BME680_FILTER_COEFF_VAL);
 	if (ret < 0) {
 		dev_err(dev, "failed to write config register\n");
 		return ret;
 	}
 
-	osrs = BME680_OSRS_TEMP_X(data->oversampling_temp + 1) |
-		BME680_OSRS_PRESS_X(data->oversampling_press + 1);
+	osrs = FIELD_PREP(BME680_OSRS_TEMP_MASK, data->oversampling_temp + 1) |
+		FIELD_PREP(BME680_OSRS_PRESS_MASK, data->oversampling_press + 1);
 
 	ret = regmap_write_bits(data->regmap, BME680_REG_CTRL_MEAS,
 				BME680_OSRS_TEMP_MASK |
@@ -553,7 +555,7 @@ static int bme680_gas_config(struct bme680_data *data)
 	/* Selecting the runGas and NB conversion settings for the sensor */
 	ret = regmap_update_bits(data->regmap, BME680_REG_CTRL_GAS_1,
 				 BME680_RUN_GAS_MASK | BME680_NB_CONV_MASK,
-				 BME680_RUN_GAS_EN | BME680_NB_CONV_0);
+				 BME680_RUN_GAS_EN_BIT | BME680_NB_CONV_0_VAL);
 	if (ret < 0)
 		dev_err(dev, "failed to write ctrl_gas_1 register\n");
 

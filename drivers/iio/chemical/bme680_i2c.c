@@ -33,7 +33,7 @@ static int bme680_i2c_probe(struct i2c_client *client,
 		return PTR_ERR(regmap);
 	}
 
-	ret = regmap_write(regmap, BME680_REG_SOFT_RESET,
+	ret = regmap_write(regmap, BME680_REG_SOFT_RESET_I2C,
 			   BME680_CMD_SOFTRESET);
 	if (ret < 0)
 		return ret;
