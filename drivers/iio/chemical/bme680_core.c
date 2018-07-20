@@ -4,6 +4,9 @@
  *
  * Copyright (C) 2017 - 2018 Bosch Sensortec GmbH
  * Copyright (C) 2018 Himanshu Jha <himanshujha199640@gmail.com>
+ *
+ * Datasheet:
+ * https://ae-bst.resource.bosch.com/media/_tech/media/datasheets/BST-BME680-DS001-00.pdf
  */
 #include <linux/acpi.h>
 #include <linux/bitfield.h>
@@ -313,7 +316,13 @@ static int bme680_read_calib(struct bme680_data *data,
 	return 0;
 }
 
-/* Taken from Bosch BME680 API */
+/*
+ * Taken from Bosch BME680 API:
+ * https://github.com/BoschSensortec/BME680_driver/blob/63bb5336/bme680.c#L876
+ *
+ * Returns temperature measurement in DegC, resolutions is 0.01 DegC. Therefore,
+ * output value of "3233" represents 32.33 DegC.
+ */
 static s32 bme680_compensate_temp(struct bme680_data *data,
 				  s32 adc_temp)
 {
@@ -330,7 +339,13 @@ static s32 bme680_compensate_temp(struct bme680_data *data,
 	return calc_temp;
 }
 
-/* Taken from Bosch BME680 API */
+/*
+ * Taken from Bosch BME680 API:
+ * https://github.com/BoschSensortec/BME680_driver/blob/63bb5336/bme680.c#L896
+ *
+ * Returns pressure measurement in Pa. Output value of "97356" represents
+ * 97356 Pa = 973.56 hPa.
+ */
 static u32 bme680_compensate_press(struct bme680_data *data,
 				   u32 adc_press)
 {
@@ -365,7 +380,13 @@ static u32 bme680_compensate_press(struct bme680_data *data,
 	return press_comp;
 }
 
-/* Taken from Bosch BME680 API */
+/*
+ * Taken from Bosch BME680 API:
+ * https://github.com/BoschSensortec/BME680_driver/blob/63bb5336/bme680.c#L937
+ *
+ * Returns humidity measurement in percent, resolution is 0.001 percent. Output
+ * value of "43215" represents 43.215 %rH.
+ */
 static u32 bme680_compensate_humid(struct bme680_data *data,
 				   u16 adc_humid)
 {
@@ -394,7 +415,12 @@ static u32 bme680_compensate_humid(struct bme680_data *data,
 	return calc_hum;
 }
 
-/* Taken from Bosch BME680 API */
+/*
+ * Taken from Bosch BME680 API:
+ * https://github.com/BoschSensortec/BME680_driver/blob/63bb5336/bme680.c#L973
+ *
+ * Returns gas measurement in Ohm. Output value of "82986" represent 82986 ohms.
+ */
 static u32 bme680_compensate_gas(struct bme680_data *data, u16 gas_res_adc,
 				 u8 gas_range)
 {
@@ -426,7 +452,10 @@ static u32 bme680_compensate_gas(struct bme680_data *data, u16 gas_res_adc,
 	return calc_gas_res;
 }
 
-/* Taken from Bosch BME680 API */
+/*
+ * Taken from Bosch BME680 API:
+ * https://github.com/BoschSensortec/BME680_driver/blob/63bb5336/bme680.c#L1002
+ */
 static u8 bme680_calc_heater_res(struct bme680_data *data, u16 temp)
 {
 	struct bme680_calib *calib = &data->bme680;
@@ -449,7 +478,10 @@ static u8 bme680_calc_heater_res(struct bme680_data *data, u16 temp)
 	return heatr_res;
 }
 
-/* Taken from Bosch BME680 API */
+/*
+ * Taken from Bosch BME680 API:
+ * https://github.com/BoschSensortec/BME680_driver/blob/63bb5336/bme680.c#L1188
+ */
 static u8 bme680_calc_heater_dur(u16 dur)
 {
 	u8 durval, factor = 0;
@@ -562,7 +594,6 @@ static int bme680_gas_config(struct bme680_data *data)
 	return ret;
 }
 
-/* Outputs temperature measurement in degC */
 static int bme680_read_temp(struct bme680_data *data,
 			    int *val, int *val2)
 {
@@ -605,7 +636,6 @@ static int bme680_read_temp(struct bme680_data *data,
 	return ret;
 }
 
-/* Outputs pressure measurement in hPa */
 static int bme680_read_press(struct bme680_data *data,
 			     int *val, int *val2)
 {
@@ -638,7 +668,6 @@ static int bme680_read_press(struct bme680_data *data,
 	return IIO_VAL_FRACTIONAL;
 }
 
-/* Outputs humidity measurement in %r.H */
 static int bme680_read_humid(struct bme680_data *data,
 			     int *val, int *val2)
 {
@@ -673,7 +702,6 @@ static int bme680_read_humid(struct bme680_data *data,
 	return IIO_VAL_FRACTIONAL;
 }
 
-/* Outputs gas measurement in ohm */
 static int bme680_read_gas(struct bme680_data *data,
 			   int *val)
 {
@@ -779,7 +807,7 @@ static int bme680_write_oversampling_ratio_temp(struct bme680_data *data,
 {
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(bme680_oversampling_avail); ++i) {
+	for (i = 0; i < ARRAY_SIZE(bme680_oversampling_avail); i++) {
 		if (bme680_oversampling_avail[i] == val) {
 			data->oversampling_temp = ilog2(val);
 
@@ -795,7 +823,7 @@ static int bme680_write_oversampling_ratio_press(struct bme680_data *data,
 {
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(bme680_oversampling_avail); ++i) {
+	for (i = 0; i < ARRAY_SIZE(bme680_oversampling_avail); i++) {
 		if (bme680_oversampling_avail[i] == val) {
 			data->oversampling_press = ilog2(val);
 
@@ -811,7 +839,7 @@ static int bme680_write_oversampling_ratio_humid(struct bme680_data *data,
 {
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(bme680_oversampling_avail); ++i) {
+	for (i = 0; i < ARRAY_SIZE(bme680_oversampling_avail); i++) {
 		if (bme680_oversampling_avail[i] == val) {
 			data->oversampling_humid = ilog2(val);
 
